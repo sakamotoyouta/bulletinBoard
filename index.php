@@ -2,25 +2,45 @@
 function h($str){
 	return htmlspecialchars($str,ENT_QUOTES,'utf-8');
 }
+
+session_start();
+
 $name = (string)filter_input(INPUT_POST,'name');
 $text = (string)filter_input(INPUT_POST,'text');
 $token = (string)filter_input(INPUT_POST,'token');
 
-$fp = fopen('data.csv','a+b');
-if($_SERVER['REQUEST_METHOD'] === 'POST' && sha1(session_id())=== $token){
-	//ファイル書き込み前に排他ロック
-	flock($fp,LOCK_EX);
-	fputcsv($fp,[$name,$text]);
-	//ポインタを先頭に
+// $fp = fopen('data.csv','a+b');
+// if($_SERVER['REQUEST_METHOD'] === 'POST' && sha1(session_id())=== $token){
+// 	//ファイル書き込み前に排他ロック
+// 	flock($fp,LOCK_EX);
+// 	//ファイル書き込み
+// 	fputcsv($fp,[$name,$text]);
+// 	//ポインタを先頭に
+// 	rewind($fp);
+// }
+// //共有ロックを実行or切り替え
+// flock($fp,LOCK_SH);
+// while($row = fgetcsv($fp)){
+// 	$rows[] = $row;
+// }
+// //ファイル操作が終了したのでロック解除
+// flock($fp,LOCK_UN);
+// fclose($fp);
+
+//json
+//cモードは任意の位置から書き込み可能
+$fp = fopen('data.json','c+b');
+//jsonファイルの中身を全て読み込む（配列として）
+$rows = (array)json_decode(stream_get_contents($fp),true);
+if($_SERVER['REQUEST_METHOD'] === 'POST'){
+	//ファイルから読み込んだ変数に今回POSTされた分を追加
+	$rows[]=['name'=>$_POST['name'],'text'=>$_POST['text']];
 	rewind($fp);
+	//ファイル先頭からファイルに書き込み
+	fwrite($fp,json_encode($rows,JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+	//今回書き込んだ分より前に書き込まれていた分を削除
+	ftruncate($fp,ftell($fp));
 }
-//共有ロックを実行or切り替え
-flock($fp,LOCK_SH);
-while($row = fgetcsv($fp)){
-	$rows[] = $row;
-}
-flock($fp,LOCK_UN);
-fclose($fp);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -44,7 +64,7 @@ fclose($fp);
 	<?php if(!empty($rows)): ?>
 		<ul>
 	<?php foreach ($rows as $row): ?>
-			<li><?=$row[1]?>(<?=$row[0]?>)</li>
+			<li><?=$row['name']?>(<?=$row['text']?>)</li>
 	<?php endforeach; ?>
 		</ul>
 	<?php else: ?>
